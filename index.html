@@ -28,6 +28,47 @@
     -webkit-font-smoothing: antialiased;
     padding-bottom: 84px;
   }
+
+  /* Bandeau d'alerte de sauvegarde du Dimanche */
+  .backup-alert {
+    display: none;
+    background: rgba(255, 0, 127, 0.15);
+    border-bottom: 2px solid var(--accent-pink);
+    padding: 12px 16px;
+    text-align: center;
+    font-family: ui-monospace, monospace;
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    color: #fff;
+    box-shadow: 0 4px 15px rgba(255, 0, 127, 0.2);
+    animation: pulse-border 2s infinite alternate;
+  }
+  @keyframes pulse-border {
+    from { border-color: var(--accent-pink); }
+    to { border-color: var(--accent-cyan); }
+  }
+  .backup-alert span {
+    font-weight: bold;
+    color: var(--accent-pink);
+    text-shadow: var(--neon-pink-glow);
+  }
+  .backup-alert button {
+    background: var(--accent-cyan);
+    color: #000;
+    border: none;
+    border-radius: 4px;
+    padding: 4px 10px;
+    margin-left: 10px;
+    font-family: monospace;
+    font-size: 11px;
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: var(--neon-cyan-glow);
+    text-transform: uppercase;
+  }
+  .backup-alert button:active {
+    opacity: 0.8;
+  }
   
   .wrap { max-width: 520px; margin: 0 auto; padding: 0 16px; }
   
@@ -310,6 +351,11 @@
 </head>
 <body>
 
+<!-- Bandeau d'alerte de sauvegarde du Dimanche -->
+<div class="backup-alert" id="sundayBackupAlert">
+  <span>⚠️ PROTOCOLE DIMANCHE :</span> Pense à sauvegarder tes données. <button id="btnAlertBackup">Sauvegarder maintenant</button>
+</div>
+
 <header>
   <div class="eyebrow" id="todayLabel">--</div>
   <h1>Habitudes</h1>
@@ -454,6 +500,47 @@ function readableDate(dateStr) {
   if (dateStr === fmt(yesterday)) return "Hier";
 
   return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]}`;
+}
+
+/* ---------- Gestion de la Notification du Dimanche ---------- */
+function checkSundayBackup() {
+  const today = new Date();
+  const alertBox = document.getElementById("sundayBackupAlert");
+  
+  // 0 représente le dimanche en JavaScript
+  if (today.getDay() === 0) {
+    const lastBackupDate = localStorage.getItem("last_sunday_backup_date");
+    const todayString = todayStr();
+    
+    // Si la sauvegarde n'a pas encore été faite aujourd'hui, on affiche l'alerte
+    if (lastBackupDate !== todayString) {
+      alertBox.style.display = "block";
+    } else {
+      alertBox.style.display = "none";
+    }
+  } else {
+    alertBox.style.display = "none";
+  }
+}
+
+function triggerExport() {
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state));
+  const downloadAnchor = document.createElement('a');
+  downloadAnchor.setAttribute("href", dataStr);
+  
+  const today = new Date();
+  const dateString = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
+  downloadAnchor.setAttribute("download", `habitudes-export-${dateString}.json`);
+  
+  document.body.appendChild(downloadAnchor);
+  downloadAnchor.click();
+  downloadAnchor.remove();
+
+  // Enregistrer que la sauvegarde a été faite aujourd'hui pour masquer l'alerte
+  if (today.getDay() === 0) {
+    localStorage.setItem("last_sunday_backup_date", todayStr());
+    document.getElementById("sundayBackupAlert").style.display = "none";
+  }
 }
 
 /* ---------- Ajout / suppression d'habitudes ---------- */
@@ -608,7 +695,7 @@ function renderJournal() {
   renderJournalDetails();
 }
 
-// Détail du jour cliqué dans le calendrier (Modifié pour être rétroactif !)
+// Détail du jour cliqué dans le calendrier (Rétroactif !)
 function renderJournalDetails() {
   const title = document.getElementById("selectedDateTitle");
   const list = document.getElementById("selectedDateList");
@@ -623,7 +710,7 @@ function renderJournalDetails() {
   const doneCount = state.habits.filter(h => isDone(h.id, selectedDateStr)).length;
   title.textContent += ` (${doneCount}/${state.habits.length} validées)`.toUpperCase();
 
-  // On génère des rangées interactives identiques à celles de l'onglet Aujourd'hui
+  // On génère des rangées interactives
   list.innerHTML = state.habits.map(h => {
     const done = isDone(h.id, selectedDateStr);
     return `
@@ -699,7 +786,7 @@ function renderLineChart() {
   svg.innerHTML = svgElements;
 }
 
-/* ---------- Rendu : Stats (Correction des objectifs) ---------- */
+/* ---------- Rendu : Stats ---------- */
 let statPeriod = "week";
 function renderStats(){
   const list = document.getElementById("statsList");
@@ -777,22 +864,12 @@ function renderAll(){
   renderLineChart();
   renderStats();
   renderManage();
+  checkSundayBackup();
 }
 
-/* ---------- Import/Export JSON ---------- */
-document.getElementById("btnExport").addEventListener("click", () => {
-  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state));
-  const downloadAnchor = document.createElement('a');
-  downloadAnchor.setAttribute("href", dataStr);
-  
-  const today = new Date();
-  const dateString = `${today.getFullYear()}-${pad(today.getMonth()+1)}-${pad(today.getDate())}`;
-  downloadAnchor.setAttribute("download", `habitudes-export-${dateString}.json`);
-  
-  document.body.appendChild(downloadAnchor);
-  downloadAnchor.click();
-  downloadAnchor.remove();
-});
+/* ---------- Événements Sauvegardes ---------- */
+document.getElementById("btnExport").addEventListener("click", triggerExport);
+document.getElementById("btnAlertBackup").addEventListener("click", triggerExport);
 
 document.getElementById("importFile").addEventListener("change", (e) => {
   const file = e.target.files[0];
