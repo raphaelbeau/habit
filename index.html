@@ -595,7 +595,7 @@ function renderJournal() {
   renderJournalDetails();
 }
 
-// Détail du jour cliqué dans le calendrier
+// Détail du jour cliqué dans le calendrier (Modifié pour être interactif !)
 function renderJournalDetails() {
   const title = document.getElementById("selectedDateTitle");
   const list = document.getElementById("selectedDateList");
@@ -610,12 +610,17 @@ function renderJournalDetails() {
   const doneCount = state.habits.filter(h => isDone(h.id, selectedDateStr)).length;
   title.textContent += ` (${doneCount}/${state.habits.length} validées)`.toUpperCase();
 
+  // On génère des rangées interactives identiques à celles de l'onglet Aujourd'hui
   list.innerHTML = state.habits.map(h => {
     const done = isDone(h.id, selectedDateStr);
     return `
-      <div class="journal-detail-item ${done ? '' : 'unchecked'}">
-        <div class="journal-detail-bullet ${done ? '' : 'empty-bullet'}"></div>
-        <div>${escapeHtml(h.name)} <span style="font-size:10px; opacity:0.6; font-family:monospace;">[cible: ${h.target}x/sem]</span></div>
+      <div class="habit-row" style="margin-bottom: 8px; padding: 12px; background: rgba(13, 14, 21, 0.4); gap: 10px;">
+        <div class="check ${done ? 'done' : ''}" data-habit="${h.id}" data-date="${selectedDateStr}" style="width: 24px; height: 24px; border-radius: 6px;"></div>
+        <div class="habit-main">
+          <div class="habit-name" style="font-size: 14px; ${done ? '' : 'color: var(--ink-soft); text-decoration: line-through; opacity: 0.6;'}">
+            ${escapeHtml(h.name)}
+          </div>
+        </div>
       </div>
     `;
   }).join("");
