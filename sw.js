@@ -1,4 +1,4 @@
-const CACHE_NAME = "habitudes-v1";
+const CACHE_NAME = "habitudes-v2";
 const ASSETS = ["./", "./index.html", "./manifest.json"];
 
 self.addEventListener("install", event => {
