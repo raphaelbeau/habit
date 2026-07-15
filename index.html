@@ -304,12 +304,12 @@
 <body>
 
 <header>
-  <div class="eyebrow" id="todayLabel">SYSTEM ONLINE // --</div>
+  <div class="eyebrow" id="todayLabel">--</div>
   <h1>Habitudes</h1>
-  <div class="subdate">Coche ce que tu as fait aujourd'hui.</div>
+  <div class="subdate"></div>
   
   <div class="heatmap-card">
-    <div class="heatmap-title">Matrix Grid // 15 Derniers Jours</div>
+    <div class="heatmap-title">15 Derniers Jours</div>
     <div class="heatmap-container" id="heatmapGrid"></div>
   </div>
 </header>
@@ -362,20 +362,20 @@
   <section id="tab-manage">
     <div class="add-panel">
       <div class="addbar">
-        <input id="newHabitInput" placeholder="ex : Faire des pompes" maxlength="40">
+        <input id="newHabitInput" maxlength="40">
         <div class="frequency-selector">
-          <span>Objectif hebdomadaire :</span>
+          <span>Objectif :</span>
           <select id="habitTargetSelect">
-            <option value="7">7 jours / semaine (Tous les jours)</option>
-            <option value="6">6 jours / semaine</option>
-            <option value="5">5 jours / semaine</option>
-            <option value="4">4 jours / semaine</option>
-            <option value="3">3 jours / semaine</option>
-            <option value="2">2 jours / semaine</option>
-            <option value="1">1 jour / semaine</option>
+            <option value="7">7/7</option>
+            <option value="6">6/7</option>
+            <option value="5">5/7</option>
+            <option value="4">4/7</option>
+            <option value="3">3/7</option>
+            <option value="2">2/7</option>
+            <option value="1">1/7</option>
           </select>
         </div>
-        <button id="addHabitBtn">Initialiser l'habitude</button>
+        <button id="addHabitBtn">Creer</button>
       </div>
     </div>
     <div id="manageList"></div>
@@ -754,9 +754,9 @@ function renderManage(){
     <div class="manage-row">
       <div>
         <div class="name">${escapeHtml(h.name)}</div>
-        <div class="meta">Objectif : ${h.target || 7}x/semaine</div>
+        <div class="meta">Objectif : ${h.target || 7}/semaine</div>
       </div>
-      <button class="del" data-del="${h.id}">Éliminer</button>
+      <button class="del" data-del="${h.id}">Supprimer</button>
     </div>
   `).join("");
 }
