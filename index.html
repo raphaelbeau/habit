@@ -29,7 +29,6 @@
     padding-bottom: 84px;
   }
   
-  /* Style Cyberpunk global */
   .wrap { max-width: 520px; margin: 0 auto; padding: 0 16px; }
   
   header {
@@ -50,7 +49,7 @@
   }
   .subdate { font-size: 13px; color: var(--ink-soft); }
 
-  /* Grid Board (Heatmap comme sur ta capture) */
+  /* Grid Board (Heatmap) */
   .heatmap-card {
     background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);
     padding: 14px; margin: 16px auto 0; max-width: 520px;
@@ -265,8 +264,7 @@
   
   <div class="heatmap-card">
     <div class="heatmap-title">Matrix Grid // 15 Derniers Jours</div>
-    <div class="heatmap-container" id="heatmapGrid">
-      </div>
+    <div class="heatmap-container" id="heatmapGrid"></div>
   </div>
 </header>
 
@@ -330,22 +328,32 @@
 </main>
 
 <script>
-/* ---------- Stockage ---------- */
-const STORAGE_KEY = "habit-tracker-cyberpunk-v1";
+/* ---------- Stockage & MIGRATION SÉCURISÉE ---------- */
+const STORAGE_KEY = "habit-tracker-v1"; // Garder la même clé pour récupérer ton historique !
 
 function loadData(){
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if(!raw) return { habits: [], entries: {} };
+    
     const parsed = JSON.parse(raw);
-    // Migration s'il y a des anciennes habitudes sans cible/target
-    if (parsed.habits) {
-      parsed.habits.forEach(h => {
-        if (h.target === undefined) h.target = 7; 
-      });
-    }
+    
+    // SÉCURITÉ : On s'assure que habits et entries existent bien
+    if (!parsed.habits) parsed.habits = [];
+    if (!parsed.entries) parsed.entries = {};
+
+    // MIGRATION : On répare les anciennes habitudes en leur injectant par défaut "target: 7" si manquant
+    parsed.habits.forEach(h => {
+      if (h.target === undefined || h.target === null) {
+        h.target = 7; 
+      }
+    });
+
     return parsed;
-  } catch(e) { return { habits: [], entries: {} }; }
+  } catch(e) { 
+    console.error("Erreur lecture LocalStorage, réinitialisation sécurisée :", e);
+    return { habits: [], entries: {} }; 
+  }
 }
 
 function saveData(){
@@ -368,7 +376,6 @@ function toggle(habitId, dateStr){
   renderAll();
 }
 
-// Convertit une date YYYY-MM-DD en texte lisible en français
 function readableDate(dateStr) {
   const d = new Date(dateStr);
   const days = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
@@ -387,12 +394,15 @@ function readableDate(dateStr) {
 function addHabit(name, target){
   name = name.trim();
   if(!name) return;
-  state.habits.push({ 
+  
+  const newHabit = { 
     id: "h_"+Date.now()+"_"+Math.random().toString(36).slice(2,7), 
     name, 
     target: parseInt(target, 10) || 7,
     createdAt: todayStr() 
-  });
+  };
+  
+  state.habits.push(newHabit);
   saveData();
   renderAll();
 }
@@ -407,7 +417,7 @@ function removeHabit(id){
 /* ---------- Rendu : Aujourd'hui ---------- */
 function renderToday(){
   const list = document.getElementById("todayList");
-  if(state.habits.length === 0){
+  if(!state.habits || state.habits.length === 0){
     list.innerHTML = `<div class="empty">Aucun protocole d'habitude enregistré.<br>Ajoute-en un dans l'onglet « Habitudes ».</div>`;
   } else {
     const t = todayStr();
@@ -427,7 +437,7 @@ function renderToday(){
           <div class="check ${done?'done':''}" data-habit="${h.id}" data-date="${t}"></div>
           <div class="habit-main">
             <div class="habit-name">${escapeHtml(h.name)}</div>
-            <div class="habit-target-info">cible: ${h.target}x/semaine</div>
+            <div class="habit-target-info">cible: ${h.target || 7}x/semaine</div>
             <div class="dotstrip">${dots.join("")}</div>
           </div>
         </div>`;
@@ -436,27 +446,27 @@ function renderToday(){
 }
 
 function escapeHtml(s){
+  if (!s) return "";
   return s.replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
 
 /* ---------- Rendu : Grid Board (Heatmap) ---------- */
 function renderHeatmap() {
   const grid = document.getElementById("heatmapGrid");
-  if(state.habits.length === 0) {
+  if(!state.habits || state.habits.length === 0) {
     grid.innerHTML = `<div style="color:var(--ink-soft); font-size:12px; font-family:monospace;">Aucune donnée</div>`;
     return;
   }
   
   let html = "";
   const totalHabits = state.habits.length;
-  const daysToShow = 15; // 15 jours en arrière
+  const daysToShow = 15;
 
   for (let i = daysToShow - 1; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
     const ds = fmt(d);
     
-    // Calcul de la complétion du jour
     const doneCount = state.habits.filter(h => isDone(h.id, ds)).length;
     let levelClass = "";
     if (doneCount > 0) {
@@ -467,7 +477,6 @@ function renderHeatmap() {
       else levelClass = "level-1";
     }
     
-    // Formatage libellé jour (ex: L 12)
     const weekdaysMin = ["D", "L", "M", "M", "J", "V", "S"];
     const dayName = weekdaysMin[d.getDay()];
     const dayNum = d.getDate();
@@ -483,16 +492,16 @@ function renderHeatmap() {
   grid.innerHTML = html;
 }
 
-/* ---------- Rendu : Journal (Ancien Historique) ---------- */
+/* ---------- Rendu : Journal ---------- */
 function renderJournal() {
   const list = document.getElementById("journalList");
-  if(state.habits.length === 0){
+  if(!state.habits || state.habits.length === 0){
     list.innerHTML = `<div class="empty">Crée des habitudes pour générer ton journal de bord.</div>`;
     return;
   }
   
   let html = "";
-  const daysToRender = 10; // Montre les 10 derniers jours complets
+  const daysToRender = 10;
   
   for(let i = 0; i < daysToRender; i++) {
     const d = new Date();
@@ -525,15 +534,15 @@ function renderJournal() {
   list.innerHTML = html;
 }
 
-/* ---------- Rendu : Graphique d'évolution ---------- */
+/* ---------- Rendu : Graphique d'évolution (SVG) ---------- */
 function renderLineChart() {
   const svg = document.getElementById("lineChartSvg");
-  if (state.habits.length === 0) {
+  if (!state.habits || state.habits.length === 0) {
     svg.innerHTML = "";
     return;
   }
 
-  const daysCount = 10; // Suivi sur 10 jours
+  const daysCount = 10;
   const data = [];
   
   for (let i = daysCount - 1; i >= 0; i--) {
@@ -541,10 +550,7 @@ function renderLineChart() {
     d.setDate(d.getDate() - i);
     const ds = fmt(d);
     const completions = state.habits.filter(h => isDone(h.id, ds)).length;
-    data.push({
-      label: d.getDate(),
-      value: completions
-    });
+    data.push({ label: d.getDate(), value: completions });
   }
 
   const maxVal = Math.max(state.habits.length, 1);
@@ -555,14 +561,12 @@ function renderLineChart() {
   const chartWidth = width - paddingX * 2;
   const chartHeight = height - paddingY * 2;
 
-  // Génération des coordonnées
   const points = data.map((d, index) => {
     const x = paddingX + (index / (daysCount - 1)) * chartWidth;
     const y = paddingY + chartHeight - (d.value / maxVal) * chartHeight;
     return { x, y, val: d.value, label: d.label };
   });
 
-  // Construction du chemin SVG (Line path)
   let pathD = `M ${points[0].x} ${points[0].y}`;
   for (let i = 1; i < points.length; i++) {
     pathD += ` L ${points[i].x} ${points[i].y}`;
@@ -570,7 +574,6 @@ function renderLineChart() {
 
   let svgElements = "";
   
-  // Lignes d'axes d'arrière plan
   for (let i = 0; i <= 4; i++) {
     const yRatio = i / 4;
     const yVal = paddingY + yRatio * chartHeight;
@@ -579,10 +582,8 @@ function renderLineChart() {
     svgElements += `<text class="chart-text" x="${paddingX - 15}" y="${yVal + 3}" style="text-anchor: end; fill:var(--accent-cyan); font-weight:bold;">${labelVal}</text>`;
   }
 
-  // Tracer la ligne d'évolution
   svgElements += `<path class="chart-line" d="${pathD}" />`;
 
-  // Ajouter les points interactifs et étiquettes X
   points.forEach(p => {
     svgElements += `<line class="chart-axis" x1="${p.x}" y1="${height - paddingY}" x2="${p.x}" y2="${height - paddingY + 5}" />`;
     svgElements += `<text class="chart-text" x="${p.x}" y="${height - paddingY + 16}">${p.label}</text>`;
@@ -597,7 +598,7 @@ function renderLineChart() {
 let statPeriod = "week";
 function renderStats(){
   const list = document.getElementById("statsList");
-  if(state.habits.length === 0){
+  if(!state.habits || state.habits.length === 0){
     list.innerHTML = `<div class="empty">Zéro statistiques. Initialise des habitudes.</div>`;
     return;
   }
@@ -606,8 +607,7 @@ function renderStats(){
   let daysInPeriod = [];
   
   if(statPeriod === "week"){
-    // Jours de la semaine actuelle (du lundi à aujourd'hui)
-    const currentDay = (now.getDay() + 6) % 7; // lundi = 0, dimanche = 6
+    const currentDay = (now.getDay() + 6) % 7; // lundi = 0
     const monday = new Date(now);
     monday.setDate(now.getDate() - currentDay);
     
@@ -617,7 +617,6 @@ function renderStats(){
       if(d <= now) daysInPeriod.push(fmt(d));
     }
   } else {
-    // Jours du mois actuel (du 1er à aujourd'hui)
     const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     for(let d = new Date(firstDayOfMonth); d <= now; d.setDate(d.getDate() + 1)){
       daysInPeriod.push(fmt(d));
@@ -627,16 +626,14 @@ function renderStats(){
   list.innerHTML = state.habits.map(h => {
     const doneCount = daysInPeriod.filter(ds => isDone(h.id, ds)).length;
     
-    // Calcul de l'objectif adapté à la période courante
     let periodTarget = 0;
+    const habitTarget = h.target || 7;
     if (statPeriod === "week") {
-      // Ajustement de la cible hebdomadaire si la semaine n'est pas complète
-      const elapsedDaysThisWeek = daysInPeriod.length; // Entre 1 et 7
-      periodTarget = Math.max(1, Math.round((h.target / 7) * elapsedDaysThisWeek));
+      const elapsedDaysThisWeek = daysInPeriod.length;
+      periodTarget = Math.max(1, Math.round((habitTarget / 7) * elapsedDaysThisWeek));
     } else {
-      // Ajustement de la cible pour le mois en cours
       const elapsedDaysThisMonth = daysInPeriod.length;
-      periodTarget = Math.max(1, Math.round((h.target / 7) * elapsedDaysThisMonth));
+      periodTarget = Math.max(1, Math.round((habitTarget / 7) * elapsedDaysThisMonth));
     }
 
     const pct = periodTarget ? Math.min(100, Math.round((doneCount / periodTarget) * 100)) : 0;
@@ -655,7 +652,7 @@ function renderStats(){
 /* ---------- Rendu : Gestion & Paramètres ---------- */
 function renderManage(){
   const list = document.getElementById("manageList");
-  if(state.habits.length === 0){
+  if(!state.habits || state.habits.length === 0){
     list.innerHTML = `<div class="empty">Aucun protocole configuré.</div>`;
     return;
   }
@@ -663,7 +660,7 @@ function renderManage(){
     <div class="manage-row">
       <div>
         <div class="name">${escapeHtml(h.name)}</div>
-        <div class="meta">Objectif : ${h.target}x/semaine</div>
+        <div class="meta">Objectif : ${h.target || 7}x/semaine</div>
       </div>
       <button class="del" data-del="${h.id}">Éliminer</button>
     </div>
@@ -680,7 +677,7 @@ function renderAll(){
   renderManage();
 }
 
-/* ---------- Import/Export (Nouveauté) ---------- */
+/* ---------- Import/Export JSON ---------- */
 document.getElementById("btnExport").addEventListener("click", () => {
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state));
   const downloadAnchor = document.createElement('a');
@@ -705,6 +702,10 @@ document.getElementById("importFile").addEventListener("change", (e) => {
       const parsed = JSON.parse(evt.target.result);
       if (parsed && Array.isArray(parsed.habits) && parsed.entries) {
         if(confirm("Importer ces données va écraser les habitudes de cet appareil. Continuer ?")) {
+          // Migration de sécurité à l'import aussi
+          parsed.habits.forEach(h => {
+            if (h.target === undefined || h.target === null) h.target = 7;
+          });
           state = parsed;
           saveData();
           renderAll();
@@ -733,7 +734,6 @@ document.querySelectorAll("nav.tabs button").forEach(btn => {
     btn.classList.add("active");
     document.getElementById("tab-"+btn.dataset.tab).classList.add("active");
     
-    // Forcer le redessin du graphique SVG à l'affichage de l'onglet Stats
     if(btn.dataset.tab === "stats") {
       setTimeout(renderLineChart, 50);
     }
@@ -772,7 +772,6 @@ document.querySelectorAll(".periodrow button").forEach(btn => {
   });
 });
 
-/* ---------- Enregistrement Service Worker ---------- */
 if("serviceWorker" in navigator){
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("sw.js").catch(()=>{});
