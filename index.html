@@ -198,28 +198,74 @@
   .file-input-label:hover { background: var(--accent-violet); color: #fff; box-shadow: 0 0 10px rgba(157, 78, 221, 0.5); }
   #importFile { display: none; }
 
-  /* History Tab (Daily Journal View) */
-  .journal-day {
+  /* --- CALENDRIER JOURNAL (NOUVEAU) --- */
+  .cal-card {
     background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);
-    padding: 16px; margin-bottom: 12px;
+    padding: 16px; margin-bottom: 16px;
   }
-  .journal-date {
-    font-size: 13px; font-family: monospace; font-weight: bold; color: var(--accent-pink);
-    border-bottom: 1px solid var(--line); padding-bottom: 6px; margin-bottom: 10px;
-    display: flex; justify-content: space-between;
+  .cal-nav {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;
   }
-  .journal-habits-list { display: flex; flex-direction: column; gap: 8px; }
-  .journal-habit-item {
-    display: flex; align-items: center; gap: 8px; font-size: 13px;
+  .cal-nav h3 {
+    margin: 0; font-size: 14px; font-family: monospace; text-transform: uppercase;
+    color: var(--accent-cyan); letter-spacing: 0.1em;
   }
-  .journal-bullet {
+  .cal-nav button {
+    background: transparent; border: 1px solid var(--line); color: var(--ink);
+    padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold;
+  }
+  .cal-nav button:hover { border-color: var(--accent-pink); color: var(--accent-pink); }
+  
+  .cal-weekdays {
+    display: grid; grid-template-columns: repeat(7, 1fr); text-align: center;
+    font-size: 10px; color: var(--ink-soft); font-family: monospace; margin-bottom: 6px;
+  }
+  .cal-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px;
+  }
+  .cal-day {
+    aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-family: monospace; border-radius: 6px; border: 1px solid transparent;
+    cursor: pointer; transition: all 0.2s; position: relative; background: rgba(13, 14, 21, 0.3);
+  }
+  .cal-day:hover { border-color: var(--accent-pink); }
+  .cal-day.empty-slot { background: transparent; cursor: default; border: none; }
+  .cal-day.has-activity {
+    box-shadow: 0 0 6px rgba(0, 240, 255, 0.2);
+    border-color: rgba(0, 240, 255, 0.4);
+  }
+  .cal-day.has-activity::after {
+    content: ''; position: absolute; bottom: 3px; width: 4px; height: 4px;
+    border-radius: 50%; background: var(--accent-cyan);
+  }
+  .cal-day.selected {
+    background: var(--accent-pink) !important; color: #fff !important;
+    border-color: var(--accent-pink) !important; box-shadow: var(--neon-pink-glow) !important;
+  }
+  .cal-day.selected::after { background: #fff; }
+
+  /* Zone détails du jour cliqué */
+  .journal-detail-box {
+    background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 16px; margin-top: 16px;
+  }
+  .journal-detail-title {
+    font-size: 12px; font-family: monospace; text-transform: uppercase;
+    color: var(--accent-pink); border-bottom: 1px solid var(--line);
+    padding-bottom: 8px; margin-bottom: 12px; font-weight: bold;
+  }
+  .journal-detail-list { display: flex; flex-direction: column; gap: 8px; }
+  .journal-detail-item {
+    display: flex; align-items: center; gap: 10px; font-size: 13px;
+  }
+  .journal-detail-bullet {
     width: 8px; height: 8px; border-radius: 50%; background: var(--accent-cyan);
     box-shadow: var(--neon-cyan-glow);
   }
-  .journal-bullet.empty-bullet {
+  .journal-detail-bullet.empty-bullet {
     background: transparent; border: 1.5px solid var(--line); box-shadow: none;
   }
-  .journal-habit-item.unchecked { color: var(--ink-soft); text-decoration: line-through; opacity: 0.6; }
+  .journal-detail-item.unchecked { color: var(--ink-soft); text-decoration: line-through; opacity: 0.5; }
 
   /* Stats Tab & Line Chart */
   .stats-header {
@@ -281,7 +327,22 @@
   </section>
 
   <section id="tab-history">
-    <div id="journalList"></div>
+    <div class="cal-card">
+      <div class="cal-nav">
+        <button id="prevMonthBtn">&lt;</button>
+        <h3 id="calMonthTitle">Juillet 2026</h3>
+        <button id="nextMonthBtn">&gt;</button>
+      </div>
+      <div class="cal-weekdays">
+        <div>LUN</div><div>MAR</div><div>MER</div><div>JEU</div><div>VEN</div><div>SAM</div><div>DIM</div>
+      </div>
+      <div class="cal-grid" id="calendarGrid"></div>
+    </div>
+    
+    <div class="journal-detail-box" id="journalDetailBox">
+      <div class="journal-detail-title" id="selectedDateTitle">DÉTAILS DU PROXIME</div>
+      <div class="journal-detail-list" id="selectedDateList"></div>
+    </div>
   </section>
 
   <section id="tab-stats">
@@ -329,29 +390,23 @@
 
 <script>
 /* ---------- Stockage & MIGRATION SÉCURISÉE ---------- */
-const STORAGE_KEY = "habit-tracker-v1"; // Garder la même clé pour récupérer ton historique !
+const STORAGE_KEY = "habit-tracker-v1";
 
 function loadData(){
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if(!raw) return { habits: [], entries: {} };
-    
     const parsed = JSON.parse(raw);
-    
-    // SÉCURITÉ : On s'assure que habits et entries existent bien
     if (!parsed.habits) parsed.habits = [];
     if (!parsed.entries) parsed.entries = {};
 
-    // MIGRATION : On répare les anciennes habitudes en leur injectant par défaut "target: 7" si manquant
     parsed.habits.forEach(h => {
       if (h.target === undefined || h.target === null) {
         h.target = 7; 
       }
     });
-
     return parsed;
   } catch(e) { 
-    console.error("Erreur lecture LocalStorage, réinitialisation sécurisée :", e);
     return { habits: [], entries: {} }; 
   }
 }
@@ -360,6 +415,10 @@ function saveData(){
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 let state = loadData();
+
+/* ---------- Données Calendrier & États Globaux ---------- */
+let currentCalDate = new Date(); // Date de visualisation dans le calendrier
+let selectedDateStr = todayStr(); // Date sélectionnée dans le journal
 
 /* ---------- Utils dates ---------- */
 function pad(n){ return n<10 ? "0"+n : ""+n; }
@@ -492,46 +551,74 @@ function renderHeatmap() {
   grid.innerHTML = html;
 }
 
-/* ---------- Rendu : Journal ---------- */
+/* ---------- Rendu : Journal (Calendrier Interactif) ---------- */
 function renderJournal() {
-  const list = document.getElementById("journalList");
-  if(!state.habits || state.habits.length === 0){
-    list.innerHTML = `<div class="empty">Crée des habitudes pour générer ton journal de bord.</div>`;
-    return;
+  const grid = document.getElementById("calendarGrid");
+  const title = document.getElementById("calMonthTitle");
+  
+  const monthsFr = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
+  title.textContent = `${monthsFr[currentCalDate.getMonth()]} ${currentCalDate.getFullYear()}`.toUpperCase();
+
+  // Premier jour du mois
+  const firstDay = new Date(currentCalDate.getFullYear(), currentCalDate.getMonth(), 1);
+  // Décalage du premier jour (lundi = 0)
+  let startOffset = (firstDay.getDay() + 6) % 7;
+  // Nombre de jours dans le mois
+  const totalDays = new Date(currentCalDate.getFullYear(), currentCalDate.getMonth() + 1, 0).getDate();
+
+  let gridHtml = "";
+
+  // Cases vides pour le début de grille
+  for (let i = 0; i < startOffset; i++) {
+    gridHtml += `<div class="cal-day empty-slot"></div>`;
   }
-  
-  let html = "";
-  const daysToRender = 10;
-  
-  for(let i = 0; i < daysToRender; i++) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const ds = fmt(d);
+
+  // Remplissage des jours
+  for (let day = 1; day <= totalDays; day++) {
+    const loopDate = new Date(currentCalDate.getFullYear(), currentCalDate.getMonth(), day);
+    const loopDateStr = fmt(loopDate);
     
-    let habitsHtml = "";
-    state.habits.forEach(h => {
-      const done = isDone(h.id, ds);
-      habitsHtml += `
-        <div class="journal-habit-item ${done ? '' : 'unchecked'}">
-          <div class="journal-bullet ${done ? '' : 'empty-bullet'}"></div>
-          <div>${escapeHtml(h.name)}</div>
-        </div>
-      `;
-    });
-    
-    html += `
-      <div class="journal-day">
-        <div class="journal-date">
-          <span>${readableDate(ds).toUpperCase()}</span>
-          <span style="color:var(--accent-cyan)">${state.habits.filter(h => isDone(h.id, ds)).length}/${state.habits.length} OK</span>
-        </div>
-        <div class="journal-habits-list">
-          ${habitsHtml}
-        </div>
+    // Vérifier s'il y a de l'activité ce jour là
+    const doneCount = state.habits.filter(h => isDone(h.id, loopDateStr)).length;
+    const hasActivity = doneCount > 0;
+    const isSelected = loopDateStr === selectedDateStr;
+
+    gridHtml += `
+      <div class="cal-day ${hasActivity ? 'has-activity' : ''} ${isSelected ? 'selected' : ''}" 
+           data-date="${loopDateStr}">
+        ${day}
       </div>
     `;
   }
-  list.innerHTML = html;
+
+  grid.innerHTML = gridHtml;
+  renderJournalDetails();
+}
+
+// Détail du jour cliqué dans le calendrier
+function renderJournalDetails() {
+  const title = document.getElementById("selectedDateTitle");
+  const list = document.getElementById("selectedDateList");
+  
+  title.textContent = `Journal : ${readableDate(selectedDateStr)}`.toUpperCase();
+
+  if (!state.habits || state.habits.length === 0) {
+    list.innerHTML = `<div class="empty">Aucune habitude configurée.</div>`;
+    return;
+  }
+
+  const doneCount = state.habits.filter(h => isDone(h.id, selectedDateStr)).length;
+  title.textContent += ` (${doneCount}/${state.habits.length} validées)`.toUpperCase();
+
+  list.innerHTML = state.habits.map(h => {
+    const done = isDone(h.id, selectedDateStr);
+    return `
+      <div class="journal-detail-item ${done ? '' : 'unchecked'}">
+        <div class="journal-detail-bullet ${done ? '' : 'empty-bullet'}"></div>
+        <div>${escapeHtml(h.name)} <span style="font-size:10px; opacity:0.6; font-family:monospace;">[cible: ${h.target}x/sem]</span></div>
+      </div>
+    `;
+  }).join("");
 }
 
 /* ---------- Rendu : Graphique d'évolution (SVG) ---------- */
@@ -594,7 +681,7 @@ function renderLineChart() {
   svg.innerHTML = svgElements;
 }
 
-/* ---------- Rendu : Stats ---------- */
+/* ---------- Rendu : Stats (Correction des objectifs) ---------- */
 let statPeriod = "week";
 function renderStats(){
   const list = document.getElementById("statsList");
@@ -607,6 +694,7 @@ function renderStats(){
   let daysInPeriod = [];
   
   if(statPeriod === "week"){
+    // L'intégralité des 7 jours de la semaine courante (du Lundi au Dimanche)
     const currentDay = (now.getDay() + 6) % 7; // lundi = 0
     const monday = new Date(now);
     monday.setDate(now.getDate() - currentDay);
@@ -614,26 +702,27 @@ function renderStats(){
     for(let i = 0; i < 7; i++){
       const d = new Date(monday);
       d.setDate(monday.getDate() + i);
-      if(d <= now) daysInPeriod.push(fmt(d));
+      daysInPeriod.push(fmt(d));
     }
   } else {
-    const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    for(let d = new Date(firstDayOfMonth); d <= now; d.setDate(d.getDate() + 1)){
+    // Tous les jours du mois entier
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    for(let day = 1; day <= daysInMonth; day++){
+      const d = new Date(now.getFullYear(), now.getMonth(), day);
       daysInPeriod.push(fmt(d));
     }
   }
 
   list.innerHTML = state.habits.map(h => {
+    // Nombre total de coches sur la période
     const doneCount = daysInPeriod.filter(ds => isDone(h.id, ds)).length;
-    
-    let periodTarget = 0;
     const habitTarget = h.target || 7;
-    if (statPeriod === "week") {
-      const elapsedDaysThisWeek = daysInPeriod.length;
-      periodTarget = Math.max(1, Math.round((habitTarget / 7) * elapsedDaysThisWeek));
-    } else {
-      const elapsedDaysThisMonth = daysInPeriod.length;
-      periodTarget = Math.max(1, Math.round((habitTarget / 7) * elapsedDaysThisMonth));
+    
+    // Détermination de l'objectif sur la période affichée
+    let periodTarget = habitTarget; // Par défaut sur la semaine
+    if (statPeriod === "month") {
+      // Ajustement de la cible pour le mois (Cible hebdo / 7 * nombre de jours dans le mois)
+      periodTarget = Math.max(1, Math.round((habitTarget / 7) * daysInPeriod.length));
     }
 
     const pct = periodTarget ? Math.min(100, Math.round((doneCount / periodTarget) * 100)) : 0;
@@ -702,7 +791,6 @@ document.getElementById("importFile").addEventListener("change", (e) => {
       const parsed = JSON.parse(evt.target.result);
       if (parsed && Array.isArray(parsed.habits) && parsed.entries) {
         if(confirm("Importer ces données va écraser les habitudes de cet appareil. Continuer ?")) {
-          // Migration de sécurité à l'import aussi
           parsed.habits.forEach(h => {
             if (h.target === undefined || h.target === null) h.target = 7;
           });
@@ -738,6 +826,26 @@ document.querySelectorAll("nav.tabs button").forEach(btn => {
       setTimeout(renderLineChart, 50);
     }
   });
+});
+
+// Événements de navigation Calendrier (Journal)
+document.getElementById("prevMonthBtn").addEventListener("click", () => {
+  currentCalDate.setMonth(currentCalDate.getMonth() - 1);
+  renderJournal();
+});
+
+document.getElementById("nextMonthBtn").addEventListener("click", () => {
+  currentCalDate.setMonth(currentCalDate.getMonth() + 1);
+  renderJournal();
+});
+
+// Clic sur une cellule jour du calendrier
+document.getElementById("calendarGrid").addEventListener("click", e => {
+  const dayCell = e.target.closest(".cal-day:not(.empty-slot)");
+  if (dayCell) {
+    selectedDateStr = dayCell.dataset.date;
+    renderJournal();
+  }
 });
 
 document.getElementById("addHabitBtn").addEventListener("click", () => {
