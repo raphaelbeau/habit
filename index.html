@@ -198,7 +198,7 @@
   .file-input-label:hover { background: var(--accent-violet); color: #fff; box-shadow: 0 0 10px rgba(157, 78, 221, 0.5); }
   #importFile { display: none; }
 
-  /* --- CALENDRIER JOURNAL (NOUVEAU) --- */
+  /* --- CALENDRIER JOURNAL --- */
   .cal-card {
     background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);
     padding: 16px; margin-bottom: 16px;
@@ -230,19 +230,37 @@
   }
   .cal-day:hover { border-color: var(--accent-pink); }
   .cal-day.empty-slot { background: transparent; cursor: default; border: none; }
-  .cal-day.has-activity {
-    box-shadow: 0 0 6px rgba(0, 240, 255, 0.2);
+  
+  /* Coloration dynamique selon complétion (Semblable à la Heatmap) */
+  .cal-day.level-1 {
+    background: rgba(0, 240, 255, 0.15);
+    border-color: rgba(0, 240, 255, 0.2);
+  }
+  .cal-day.level-2 {
+    background: rgba(0, 240, 255, 0.35);
     border-color: rgba(0, 240, 255, 0.4);
+    box-shadow: 0 0 5px rgba(0, 240, 255, 0.1);
   }
-  .cal-day.has-activity::after {
-    content: ''; position: absolute; bottom: 3px; width: 4px; height: 4px;
-    border-radius: 50%; background: var(--accent-cyan);
+  .cal-day.level-3 {
+    background: rgba(0, 240, 255, 0.65);
+    border-color: var(--accent-cyan);
+    box-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
+    color: #000;
+    font-weight: bold;
   }
+  .cal-day.level-full {
+    background: var(--accent-pink);
+    border-color: var(--accent-pink);
+    box-shadow: var(--neon-pink-glow);
+    color: #fff;
+    font-weight: bold;
+  }
+
   .cal-day.selected {
-    background: var(--accent-pink) !important; color: #fff !important;
-    border-color: var(--accent-pink) !important; box-shadow: var(--neon-pink-glow) !important;
+    outline: 2px solid #fff;
+    outline-offset: 1px;
+    z-index: 2;
   }
-  .cal-day.selected::after { background: #fff; }
 
   /* Zone détails du jour cliqué */
   .journal-detail-box {
@@ -255,17 +273,6 @@
     padding-bottom: 8px; margin-bottom: 12px; font-weight: bold;
   }
   .journal-detail-list { display: flex; flex-direction: column; gap: 8px; }
-  .journal-detail-item {
-    display: flex; align-items: center; gap: 10px; font-size: 13px;
-  }
-  .journal-detail-bullet {
-    width: 8px; height: 8px; border-radius: 50%; background: var(--accent-cyan);
-    box-shadow: var(--neon-cyan-glow);
-  }
-  .journal-detail-bullet.empty-bullet {
-    background: transparent; border: 1.5px solid var(--line); box-shadow: none;
-  }
-  .journal-detail-item.unchecked { color: var(--ink-soft); text-decoration: line-through; opacity: 0.5; }
 
   /* Stats Tab & Line Chart */
   .stats-header {
@@ -551,7 +558,7 @@ function renderHeatmap() {
   grid.innerHTML = html;
 }
 
-/* ---------- Rendu : Journal (Calendrier Interactif) ---------- */
+/* ---------- Rendu : Journal (Calendrier Interactif Coloré) ---------- */
 function renderJournal() {
   const grid = document.getElementById("calendarGrid");
   const title = document.getElementById("calMonthTitle");
@@ -559,33 +566,39 @@ function renderJournal() {
   const monthsFr = ["Janvier", "Février", "Mars", "Avril", "Mai", "Juin", "Juillet", "Août", "Septembre", "Octobre", "Novembre", "Décembre"];
   title.textContent = `${monthsFr[currentCalDate.getMonth()]} ${currentCalDate.getFullYear()}`.toUpperCase();
 
-  // Premier jour du mois
   const firstDay = new Date(currentCalDate.getFullYear(), currentCalDate.getMonth(), 1);
-  // Décalage du premier jour (lundi = 0)
   let startOffset = (firstDay.getDay() + 6) % 7;
-  // Nombre de jours dans le mois
   const totalDays = new Date(currentCalDate.getFullYear(), currentCalDate.getMonth() + 1, 0).getDate();
 
   let gridHtml = "";
 
-  // Cases vides pour le début de grille
   for (let i = 0; i < startOffset; i++) {
     gridHtml += `<div class="cal-day empty-slot"></div>`;
   }
 
-  // Remplissage des jours
+  const totalHabits = state.habits.length;
+
   for (let day = 1; day <= totalDays; day++) {
     const loopDate = new Date(currentCalDate.getFullYear(), currentCalDate.getMonth(), day);
     const loopDateStr = fmt(loopDate);
     
-    // Vérifier s'il y a de l'activité ce jour là
     const doneCount = state.habits.filter(h => isDone(h.id, loopDateStr)).length;
-    const hasActivity = doneCount > 0;
     const isSelected = loopDateStr === selectedDateStr;
 
+    // Calcul de la classe de couleur selon la complétion du jour
+    let levelClass = "";
+    if (totalHabits > 0 && doneCount > 0) {
+      const ratio = doneCount / totalHabits;
+      if (ratio === 1) levelClass = "level-full";
+      else if (ratio >= 0.66) levelClass = "level-3";
+      else if (ratio >= 0.33) levelClass = "level-2";
+      else levelClass = "level-1";
+    }
+
     gridHtml += `
-      <div class="cal-day ${hasActivity ? 'has-activity' : ''} ${isSelected ? 'selected' : ''}" 
-           data-date="${loopDateStr}">
+      <div class="cal-day ${levelClass} ${isSelected ? 'selected' : ''}" 
+           data-date="${loopDateStr}"
+           title="${doneCount}/${totalHabits} validées">
         ${day}
       </div>
     `;
@@ -595,7 +608,7 @@ function renderJournal() {
   renderJournalDetails();
 }
 
-// Détail du jour cliqué dans le calendrier (Modifié pour être interactif !)
+// Détail du jour cliqué dans le calendrier (Modifié pour être rétroactif !)
 function renderJournalDetails() {
   const title = document.getElementById("selectedDateTitle");
   const list = document.getElementById("selectedDateList");
@@ -699,8 +712,7 @@ function renderStats(){
   let daysInPeriod = [];
   
   if(statPeriod === "week"){
-    // L'intégralité des 7 jours de la semaine courante (du Lundi au Dimanche)
-    const currentDay = (now.getDay() + 6) % 7; // lundi = 0
+    const currentDay = (now.getDay() + 6) % 7; 
     const monday = new Date(now);
     monday.setDate(now.getDate() - currentDay);
     
@@ -710,7 +722,6 @@ function renderStats(){
       daysInPeriod.push(fmt(d));
     }
   } else {
-    // Tous les jours du mois entier
     const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     for(let day = 1; day <= daysInMonth; day++){
       const d = new Date(now.getFullYear(), now.getMonth(), day);
@@ -719,14 +730,11 @@ function renderStats(){
   }
 
   list.innerHTML = state.habits.map(h => {
-    // Nombre total de coches sur la période
     const doneCount = daysInPeriod.filter(ds => isDone(h.id, ds)).length;
     const habitTarget = h.target || 7;
     
-    // Détermination de l'objectif sur la période affichée
-    let periodTarget = habitTarget; // Par défaut sur la semaine
+    let periodTarget = habitTarget; 
     if (statPeriod === "month") {
-      // Ajustement de la cible pour le mois (Cible hebdo / 7 * nombre de jours dans le mois)
       periodTarget = Math.max(1, Math.round((habitTarget / 7) * daysInPeriod.length));
     }
 
