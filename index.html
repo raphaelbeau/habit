@@ -337,6 +337,25 @@
   .barbg { height: 10px; background: #1a1e2e; border-radius: 5px; overflow: hidden; }
   .barfg { height: 100%; background: linear-gradient(90deg, var(--accent-cyan), var(--accent-violet)); border-radius: 5px; transition: width 0.4s ease-out; }
 
+  /* Matrice Habitudes x Jours */
+  .matrix-scroll { overflow-x: auto; padding-bottom: 4px; }
+  .matrix-table { border-collapse: collapse; width: 100%; min-width: 480px; }
+  .matrix-table th {
+    font-size: 9px; font-family: monospace; color: var(--ink-soft); font-weight: normal;
+    text-align: center; padding-bottom: 8px; line-height: 1.4;
+  }
+  .matrix-habit-cell {
+    text-align: left; font-size: 12px; font-weight: 600; padding-right: 10px;
+    white-space: nowrap; max-width: 110px; overflow: hidden; text-overflow: ellipsis;
+  }
+  .matrix-table td { text-align: center; padding: 3px 0; }
+  .matrix-cell-box {
+    width: 20px; height: 20px; border-radius: 5px; background: #1a1e2e;
+    margin: 0 auto; cursor: pointer; transition: all 0.15s;
+  }
+  .matrix-cell-box.on { background: var(--accent-cyan); box-shadow: var(--neon-cyan-glow); }
+  .matrix-cell-box.today-col { outline: 1px solid var(--accent-pink); outline-offset: 1px; }
+
   /* SVG Line Chart Style */
   .chart-card {
     background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius);
@@ -402,6 +421,13 @@
     <div class="chart-card">
       <div class="heatmap-title" style="margin-bottom:12px;">Evolution (Habitudes complétées par jour)</div>
       <svg class="chart-svg" viewBox="0 0 500 160" id="lineChartSvg"></svg>
+    </div>
+
+    <div class="chart-card matrix-card">
+      <div class="heatmap-title" style="margin-bottom:12px;">Détail par habitude (14 derniers jours)</div>
+      <div class="matrix-scroll">
+        <table class="matrix-table" id="matrixTable"></table>
+      </div>
     </div>
 
     <div class="stats-header">Statistiques et objectifs</div>
@@ -786,6 +812,44 @@ function renderLineChart() {
   svg.innerHTML = svgElements;
 }
 
+/* ---------- Rendu : Matrice Habitudes x Jours ---------- */
+function renderMatrix() {
+  const table = document.getElementById("matrixTable");
+  if (!table) return;
+
+  if (!state.habits || state.habits.length === 0) {
+    table.innerHTML = "";
+    return;
+  }
+
+  const daysCount = 14;
+  const days = [];
+  for (let i = daysCount - 1; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push(d);
+  }
+  const t = todayStr();
+  const weekdaysMin = ["D","L","M","M","J","V","S"];
+
+  const thead = `<thead><tr><th></th>${days.map(d => {
+    const isToday = fmt(d) === t;
+    return `<th style="${isToday ? 'color:var(--accent-pink);font-weight:bold;' : ''}">${weekdaysMin[d.getDay()]}<br>${d.getDate()}</th>`;
+  }).join("")}</tr></thead>`;
+
+  const tbody = "<tbody>" + state.habits.map(h => {
+    const cells = days.map(d => {
+      const ds = fmt(d);
+      const done = isDone(h.id, ds);
+      const isToday = ds === t;
+      return `<td><div class="matrix-cell-box ${done ? 'on' : ''} ${isToday ? 'today-col' : ''}" data-habit="${h.id}" data-date="${ds}" title="${escapeHtml(h.name)} · ${readableDate(ds)}"></div></td>`;
+    }).join("");
+    return `<tr><td class="matrix-habit-cell">${escapeHtml(h.name)}</td>${cells}</tr>`;
+  }).join("") + "</tbody>";
+
+  table.innerHTML = thead + tbody;
+}
+
 /* ---------- Rendu : Stats ---------- */
 let statPeriod = "week";
 function renderStats(){
@@ -862,6 +926,7 @@ function renderAll(){
   renderHeatmap();
   renderJournal();
   renderLineChart();
+  renderMatrix();
   renderStats();
   renderManage();
   checkSundayBackup();
